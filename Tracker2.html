@@ -1,0 +1,520 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>2026 Elite Tracker - Legend Edition</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://html2canvas.hertzen.com/dist/html2canvas.min.js"></script>
+    
+    <style>
+        :root {
+            --bg: #020617; --card: #0f172a; --text: #f1f5f9; --muted: #64748b;
+            --border: #1e293b; --accent: #3b82f6; --gold: #f59e0b;
+            --col-w: 22px; --power-color: var(--accent);
+            --rank-initiate: #3b82f6; --rank-warrior: #06b6d4;
+            --rank-master: #10b981; --rank-elite: #f59e0b;
+            --rank-titan: #ef4444; --rank-legend: #a855f7;
+        }
+        
+        @keyframes legend-pulse {
+            0% { box-shadow: 0 0 5px #f59e0b, 0 0 10px #a855f7; }
+            50% { box-shadow: 0 0 20px #f59e0b, 0 0 40px #a855f7; }
+            100% { box-shadow: 0 0 5px #f59e0b, 0 0 10px #a855f7; }
+        }
+        @keyframes titan-pulse {
+            0% { box-shadow: 0 0 5px #ef4444, 0 0 10px #ef4444; }
+            50% { box-shadow: 0 0 20px #ef4444, 0 0 35px #ef4444; }
+            100% { box-shadow: 0 0 5px #ef4444, 0 0 10px #ef4444; }
+        }
+        .legend-glow { animation: legend-pulse 2s infinite; border-color: var(--gold) !important; }
+        .titan-glow { animation: titan-pulse 2s infinite; border-color: var(--rank-titan) !important; }
+
+        body { font-family: 'Inter', sans-serif; background: var(--bg); color: var(--text); margin: 0; padding: 12px; height: 100vh; overflow: hidden; }
+        .layout { display: grid; grid-template-columns: 240px 1fr; gap: 12px; height: calc(100vh - 24px); }
+        .sidebar { display: flex; flex-direction: column; gap: 10px; overflow-y: auto; }
+        .main-content { overflow-y: auto; padding-right: 5px; } 
+
+        .side-card { background: var(--card); padding: 12px; border-radius: 10px; border: 1px solid var(--border); transition: all 0.4s ease; }
+        
+        .objective-panel { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px; padding-bottom: 20px; }
+        .obj-box { background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 12px; min-height: 120px; }
+        .goal-item { display: flex; align-items: center; gap: 8px; margin-top: 6px; font-size: 11px; }
+        .goal-item input[type="checkbox"] { width: 14px; height: 14px; cursor: pointer; accent-color: var(--power-color); margin: 0; }
+        .deadline-timer { font-size: 20px; font-weight: 800; color: var(--gold); letter-spacing: 1px; font-variant-numeric: tabular-nums; cursor: pointer; }
+
+        .progress-circle-box { display: flex; flex-direction: column; align-items: center; padding: 10px 0; position: relative;}
+        .ring-svg { width: 90px; height: 90px; transform: rotate(-90deg); }
+        .ring-bg { fill: none; stroke: var(--border); stroke-width: 6; }
+        .ring-fill { fill: none; stroke: var(--power-color); stroke-width: 8; stroke-dasharray: 283; stroke-dashoffset: 283; stroke-linecap: round; transition: 0.8s; }
+        .pct-label { position: absolute; top: 38px; font-size: 18px; font-weight: 800; }
+
+        .main-card { background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 15px; margin-bottom: 10px; }
+        .grid-scroll { overflow-x: auto; padding-bottom: 10px; }
+        .flex-container { display: flex; min-width: max-content; }
+        .habit-labels-column { width: 140px; flex-shrink: 0; margin-top: 32px; }
+        .habit-label-item { height: 26px; font-size: 11px; font-weight: 600; border-left: 3px solid var(--power-color); padding-left: 10px; display: flex; align-items: center; margin-bottom: 4px; transition: border 0.3s; }
+        .day-data-column { width: var(--col-w); display: flex; flex-direction: column; align-items: center; margin-right: 4px; flex-shrink: 0; }
+        .day-name { font-size: 7px; color: var(--muted); font-weight: 800; text-transform: uppercase; height: 10px; }
+        .day-num { font-size: 10px; font-weight: 700; height: 14px; margin-bottom: 8px; }
+        .is-today { color: var(--power-color); text-shadow: 0 0 8px var(--power-color); }
+        .check-box { width: var(--col-w); height: var(--col-w); border: 1px solid var(--border); border-radius: 4px; background: #000; appearance: none; cursor: pointer; margin-bottom: 8px; flex-shrink: 0; transition: 0.3s; }
+        .check-box:checked { background: var(--power-color); border-color: var(--power-color); box-shadow: 0 0 8px var(--power-color); }
+
+        .yearly-grid { display: flex; flex-wrap: wrap; gap: 2px; margin-top: 5px; }
+        .y-dot { width: 6px; height: 6px; background: var(--border); border-radius: 1px; }
+        .y-dot.active { background: var(--power-color); }
+
+        #report-modal { 
+            display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; 
+            background: rgba(2, 6, 23, 0.98); backdrop-filter: blur(12px); z-index: 1000; 
+            align-items: center; justify-content: center; padding: 20px;
+        }
+        .modal-card { 
+            background: linear-gradient(145deg, #0f172a, #020617); border: 2px solid var(--gold); 
+            border-radius: 24px; padding: 40px; width: 500px; text-align: center; position: relative;
+            box-shadow: 0 0 50px rgba(245, 158, 11, 0.2); overflow-y: auto; max-height: 90vh;
+        }
+        .report-header h1 { 
+            font-size: 24px; margin: 0; background: linear-gradient(to bottom, #fff, var(--gold));
+            -webkit-background-clip: text; -webkit-text-fill-color: transparent; letter-spacing: 4px; font-weight: 900;
+        }
+        .rank-badge {
+            display: inline-block; padding: 6px 20px; background: rgba(255, 255, 255, 0.05);
+            border-radius: 100px; border: 1px solid rgba(255, 255, 255, 0.1); margin: 15px 0;
+            font-size: 12px; letter-spacing: 2px; font-weight: 800; text-transform: uppercase;
+        }
+        .report-stat { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 20px 0; }
+        .r-box { background: rgba(0, 0, 0, 0.4); padding: 15px 5px; border-radius: 12px; border: 1px solid var(--border); }
+        .r-val { font-size: 20px; font-weight: 900; color: #fff; }
+        .r-label { font-size: 8px; color: var(--muted); text-transform: uppercase; margin-top: 4px; }
+        
+        .report-detail-section { text-align: left; margin-top: 25px; }
+        .detail-title { font-size: 10px; color: var(--gold); border-bottom: 1px solid var(--border); padding-bottom: 5px; margin-bottom: 10px; text-transform: uppercase; letter-spacing: 1px; }
+
+        .btn-download { 
+            width: 100%; background: #fff; color: #000; font-weight: 800; padding: 14px; 
+            border: none; border-radius: 12px; cursor: pointer; letter-spacing: 1px; transition: 0.3s; margin-top: 20px;
+        }
+
+        .stats-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 10px; }
+        .stat-box { background: var(--card); border: 1px solid var(--border); padding: 10px; border-radius: 8px; text-align: center; font-size: 9px; }
+        .stat-val { font-size: 16px; font-weight: 800; color: var(--power-color); }
+        .charts-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; min-height: 180px; }
+        
+        select, button { width: 100%; padding: 6px; background: #000; border: 1px solid var(--border); color: #fff; border-radius: 5px; font-size: 10px; cursor: pointer; }
+        .btn-add { background: var(--accent); font-weight: 700; border: none; margin-top: 8px; }
+        .btn-clone { background: #1e293b; color: #fff; border: 1px solid var(--border); margin-top: 4px; font-size: 8px; }
+        .btn-report { background: #1e293b; color: var(--gold); border: 1px solid var(--gold); margin-top: 8px; font-weight: 700; }
+        .date-input-hidden { position: absolute; opacity: 0; pointer-events: none; }
+    </style>
+</head>
+<body>
+
+<div id="report-modal">
+    <div id="capture-area" class="modal-card">
+        <div class="report-header">
+            <h1 id="report-title-text">2026 PERFORMANCE ARCHIVE</h1>
+            <div id="report-rank" class="rank-badge">INITIATE</div>
+        </div>
+        
+        <div class="report-stat">
+            <div class="r-box"><div id="r-total" class="r-val">0</div><div class="r-label">Total Check-ins</div></div>
+            <div class="r-box"><div id="r-pct" class="r-val">0%</div><div class="r-label">Avg Consistency</div></div>
+            <div class="r-box"><div id="r-habit" class="r-val">-</div><div class="r-label">Main Spec</div></div>
+            <div class="r-box"><div id="r-month" class="r-val">-</div><div class="r-label">Peak Month</div></div>
+        </div>
+
+        <div class="report-detail-section">
+            <div class="detail-title">Monthly Consistency Breakdown</div>
+            <div id="report-months-grid" style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; font-size: 10px;"></div>
+        </div>
+
+        <div class="report-detail-section">
+            <div class="detail-title">Habit Mastery Levels</div>
+            <div id="report-habits-list" style="font-size: 11px;"></div>
+        </div>
+
+        <div class="report-detail-section">
+            <div class="detail-title">Objective Audit (Checklist)</div>
+            <div id="report-checklist-summary" style="font-size: 10px; background: rgba(0,0,0,0.2); padding: 10px; border-radius: 8px;"></div>
+        </div>
+
+        <button class="btn-download" onclick="downloadReport()">SAVE PERFORMANCE CARD</button>
+        <button onclick="document.getElementById('report-modal').style.display='none'" style="background:transparent; color:var(--muted); border:none; margin-top:15px; text-decoration:underline; font-size:10px;">BACK TO DASHBOARD</button>
+    </div>
+</div>
+
+<div class="layout">
+    <div class="sidebar">
+        <div class="side-card progress-circle-box" id="main-progress-card">
+            <svg class="ring-svg"><circle class="ring-bg" cx="45" cy="45" r="41"/><circle id="ring-fill" class="ring-fill" cx="45" cy="45" r="41"/></svg>
+            <div id="pct-text" class="pct-label">0%</div>
+            <div id="mode-text" style="font-size:8px; font-weight:800; margin-top:10px; color:var(--muted)">RANKED TRACKING</div>
+        </div>
+        <div class="side-card">
+            <h4 style="font-size:9px; color:var(--muted); margin:0 0 6px 0; text-transform:uppercase;">Timeline</h4>
+            <select id="month-select" onchange="changeMonth()"></select>
+        </div>
+        <div class="side-card">
+            <h4 style="font-size:9px; color:var(--muted); margin:0 0 6px 0; text-transform:uppercase;">Habit Mastery</h4>
+            <div id="habit-list"></div>
+            <button class="btn-add" onclick="addHabit()">+ Add Habit</button>
+            <button class="btn-clone" onclick="clonePreviousHabits()">Copy from Previous Month</button>
+            
+            <h4 style="font-size:9px; color:var(--muted); margin:15px 0 6px 0; text-transform:uppercase;">Goal & Summary</h4>
+            <select id="goal-select" onchange="updateGoal()"></select>
+            <button class="btn-report" onclick="generateVisualReport()">Yearly Summary & Share</button>
+        </div>
+        <div class="side-card">
+            <h4 style="font-size:9px; color:var(--muted); margin:0 0 6px 0; text-transform:uppercase;">Annual Heatmap</h4>
+            <div id="yearly-dots" class="yearly-grid"></div>
+        </div>
+        <button style="margin-top:auto; color:red; border-color:red; opacity:0.4; font-size:9px;" onclick="resetData()">Clear Data</button>
+    </div>
+
+    <div class="main-content">
+        <div class="main-card" style="display:flex; justify-content:space-between; align-items:center; padding:10px 20px;">
+            <div style="display:flex; align-items:baseline; gap:12px;">
+                <h2 id="title-month" style="margin:0; font-size: 18px;">January 2026</h2>
+                <span id="welcome-msg" style="font-size:11px; color:var(--muted); font-weight:600;"></span>
+            </div>
+            <div id="rank-tag" style="font-size:9px; font-weight:900; color:var(--power-color); border:1px solid var(--power-color); padding:2px 8px; border-radius:4px;">RANK: FOCUS</div>
+        </div>
+        <div class="main-card"><div class="grid-scroll"><div class="flex-container"><div id="habit-labels" class="habit-labels-column"></div><div id="day-columns-container" style="display: flex;"></div></div></div></div>
+        <div class="stats-row">
+            <div class="stat-box"><div>MONTHLY GOAL</div><div class="stat-val" id="stat-goal">80%</div></div>
+            <div class="stat-box"><div>CHECK-INS</div><div class="stat-val" id="stat-wins">0</div></div>
+            <div class="stat-box"><div>CURRENT RANK</div><div class="stat-val" id="stat-level">Focus</div></div>
+        </div>
+        
+        <div class="charts-row">
+            <div class="side-card"><canvas id="chart-line"></canvas></div>
+            <div class="side-card"><canvas id="chart-bar"></canvas></div>
+        </div>
+
+        <div class="objective-panel">
+            <div class="obj-box">
+                <h4 style="font-size:9px; color:var(--gold); margin:0 0 8px 0; text-transform:uppercase;">Monthly Checklist</h4>
+                <div id="checklist-container"></div>
+                <button onclick="addChecklistItem()" style="margin-top:10px; background:var(--accent); border:none; height:24px; font-size:9px; font-weight:bold;">+ Add Task</button>
+            </div>
+            <div class="obj-box" style="display:flex; flex-direction:column; justify-content:center; align-items:center; position: relative;">
+                <h4 style="font-size:9px; color:var(--muted); margin:0 0 10px 0; text-transform:uppercase;">Custom Countdown</h4>
+                <div id="deadline-clock" class="deadline-timer">00D:00H:00M</div>
+                <input type="datetime-local" id="deadline-picker" class="date-input-hidden" onchange="setCustomDeadline(this.value)">
+                <button onclick="document.getElementById('deadline-picker').showPicker()" style="margin-top:12px; background:var(--border); border:1px solid var(--gold); color:var(--gold); width:auto; padding:4px 12px;">SET DEADLINE</button>
+                <button onclick="resetDeadline()" style="margin-top:5px; background:transparent; border:none; color:var(--muted); font-size:8px;">Reset to Month-End</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    const months = ["January","February","March","April","May","June","July","August","September","October","November","December"];
+    const week = ["S","M","T","W","T","F","S"];
+    
+    // NEW STATE STRUCTURE: monthlyHabits stores arrays per month index
+    let state = JSON.parse(localStorage.getItem('legend_v2026')) || {
+        month: new Date().getMonth(),
+        monthlyHabits: {
+            "0": ["Physics", "Chemistry", "Maths"]
+        },
+        checks: {}, 
+        goal: 80,
+        checklist: [], 
+        customDeadline: null
+    };
+    
+    // Safety check for checklist
+    if(!state.checklist) state.checklist = [];
+
+    let lineChart, barChart;
+
+    // Helper to get habits for current month
+    function getHabits() {
+        return state.monthlyHabits[state.month] || [];
+    }
+
+    function init() {
+        document.getElementById('month-select').innerHTML = months.map((m,i) => `<option value="${i}">${m}</option>`).join('');
+        document.getElementById('month-select').value = state.month;
+        document.getElementById('goal-select').innerHTML = [50,60,70,80,90,100].map(v => `<option value="${v}">${v}%</option>`).join('');
+        document.getElementById('goal-select').value = state.goal;
+        updateWelcome(); 
+        renderPrecisionGrid(); 
+        renderHabitSidebar(); 
+        renderYearlyDots(); 
+        renderChecklist(); 
+        initCharts(); 
+        updateStats(); 
+        startClock();
+    }
+
+    function setCustomDeadline(val) { if(val) { state.customDeadline = new Date(val).getTime(); save(); } }
+    function resetDeadline() { state.customDeadline = null; save(); }
+    function addChecklistItem() { const t = prompt("Task Name:"); if(t) { state.checklist.push({text: t, done: false}); save(); renderChecklist(); } }
+    function toggleTask(i) { state.checklist[i].done = !state.checklist[i].done; save(); renderChecklist(); }
+    function removeTask(i) { state.checklist.splice(i, 1); save(); renderChecklist(); }
+
+    function renderChecklist() {
+        document.getElementById('checklist-container').innerHTML = state.checklist.map((item, i) => `
+            <div class="goal-item">
+                <input type="checkbox" ${item.done ? 'checked' : ''} onchange="toggleTask(${i})">
+                <span style="${item.done ? 'text-decoration:line-through; color:var(--muted)' : ''}">${item.text}</span>
+                <span style="margin-left:auto; color:red; cursor:pointer; font-size:10px;" onclick="removeTask(${i})">✕</span>
+            </div>
+        `).join('');
+    }
+
+    function startClock() {
+        setInterval(() => {
+            const now = new Date().getTime();
+            const end = state.customDeadline || new Date(2026, state.month + 1, 0, 23, 59, 59).getTime();
+            const diff = end - now;
+            if(diff < 0) { document.getElementById('deadline-clock').innerText = "MISSION ENDED"; return; }
+            const d = Math.floor(diff / 86400000), h = Math.floor((diff % 86400000) / 3600000), m = Math.floor((diff % 3600000) / 60000), s = Math.floor((diff % 60000) / 1000);
+            const pad = (v) => String(v).padStart(2, '0');
+            document.getElementById('deadline-clock').innerText = `${pad(d)}D:${pad(h)}H:${pad(m)}M:${pad(s)}S`;
+        }, 1000);
+    }
+
+    function updateWelcome() {
+        const hr = new Date().getHours();
+        document.getElementById('welcome-msg').innerText = `| ${hr < 12 ? "Good Morning" : hr < 17 ? "Good Afternoon" : "Good Evening"}`;
+    }
+
+    function getRankData(pct) {
+        if (pct >= 96) return { name: "Eternal Legend", color: "#a855f7", isLegend: true };
+        if (pct >= 86) return { name: "Titan", color: "#ef4444" };
+        if (pct >= 76) return { name: "Elite", color: "#f59e0b" };
+        if (pct >= 61) return { name: "Master", color: "#10b981" };
+        if (pct >= 41) return { name: "Warrior", color: "#06b6d4" };
+        if (pct >= 21) return { name: "Focus", color: "#3b82f6" };
+        return { name: "Initiate", color: "#3b82f6" };
+    }
+
+    function renderPrecisionGrid() {
+        const habits = getHabits();
+        const daysInMonth = new Date(2026, state.month + 1, 0).getDate();
+        const now = new Date();
+        const isCurrentMonth = now.getFullYear() === 2026 && now.getMonth() === state.month;
+        document.getElementById('habit-labels').innerHTML = habits.map(h => `<div class="habit-label-item">${h}</div>`).join('');
+        let columnsHtml = '';
+        for(let d=1; d<=daysInMonth; d++) {
+            const dayName = week[new Date(2026, state.month, d).getDay()];
+            const isToday = isCurrentMonth && now.getDate() === d;
+            let boxesHtml = '';
+            habits.forEach((_, hIdx) => {
+                boxesHtml += `<input type="checkbox" class="check-box" onchange="toggle(${hIdx},${d},this.checked)" ${state.checks[`${state.month}-${hIdx}-${d}`] ? 'checked' : ''}>`;
+            });
+            columnsHtml += `<div class="day-data-column"><span class="day-name">${dayName}</span><span class="day-num ${isToday ? 'is-today' : ''}">${d}</span>${boxesHtml}</div>`;
+        }
+        document.getElementById('day-columns-container').innerHTML = columnsHtml;
+        document.getElementById('title-month').innerText = `${months[state.month]} 2026`;
+    }
+
+    function renderYearlyDots() {
+        let dotsHtml = '';
+        for(let m=0; m<12; m++) {
+            let dCount = new Date(2026, m+1, 0).getDate();
+            let mHabits = state.monthlyHabits[m] || [];
+            for(let d=1; d<=dCount; d++) {
+                let any = mHabits.some((_, hIdx) => state.checks[`${m}-${hIdx}-${d}`]);
+                dotsHtml += `<div class="y-dot ${any ? 'active' : ''}"></div>`;
+            }
+        }
+        document.getElementById('yearly-dots').innerHTML = dotsHtml;
+    }
+
+    function generateVisualReport() {
+        let totalWins = 0, totalPossible = 0;
+        let monthScores = Array(12).fill(0);
+        
+        // Accurate yearly calculation based on month-specific habits
+        for(let m=0; m<12; m++) {
+            const mHabits = state.monthlyHabits[m] || [];
+            const dCount = new Date(2026, m+1, 0).getDate();
+            totalPossible += (mHabits.length * dCount);
+            
+            mHabits.forEach((_, hIdx) => {
+                for(let d=1; d<=dCount; d++) {
+                    if(state.checks[`${m}-${hIdx}-${d}`]) {
+                        totalWins++;
+                        monthScores[m]++;
+                    }
+                }
+            });
+        }
+
+        const yearlyPct = Math.round((totalWins / totalPossible) * 100) || 0;
+        const rankData = getRankData(yearlyPct);
+        
+        document.getElementById('r-total').innerText = totalWins;
+        document.getElementById('r-pct').innerText = yearlyPct + '%';
+        
+        const bestMIdx = monthScores.indexOf(Math.max(...monthScores));
+        document.getElementById('r-month').innerText = totalWins > 0 ? months[bestMIdx].substring(0,3) : 'N/A';
+        
+        const currentHabits = getHabits();
+        document.getElementById('r-habit').innerText = currentHabits[0] || 'N/A';
+        
+        document.getElementById('report-rank').innerText = rankData.name;
+        document.getElementById('report-rank').style.color = rankData.color;
+        document.getElementById('report-rank').style.borderColor = rankData.color;
+
+        document.getElementById('report-months-grid').innerHTML = months.map((m, i) => {
+            const mHabits = state.monthlyHabits[i] || [];
+            const daysInM = new Date(2026, i + 1, 0).getDate();
+            const mPct = Math.round((monthScores[i] / (mHabits.length * daysInM)) * 100) || 0;
+            return `<div style="display:flex; justify-content:space-between; padding:4px; border-bottom:1px solid #1e293b">
+                <span style="color:var(--muted)">${m}</span>
+                <span style="font-weight:bold; color:${getRankData(mPct).color}">${mPct}%</span>
+            </div>`;
+        }).join('');
+
+        document.getElementById('report-habits-list').innerHTML = currentHabits.map((h, i) => {
+            let hWins = 0;
+            const daysInM = new Date(2026, state.month+1, 0).getDate();
+            for(let d=1; d<=daysInM; d++) if(state.checks[`${state.month}-${i}-${d}`]) hWins++;
+            const hPct = Math.round((hWins / daysInM) * 100) || 0;
+            return `<div style="margin-bottom:8px;">
+                <div style="display:flex; justify-content:space-between; margin-bottom:2px;">
+                    <span>${h}</span><span>${hPct}%</span>
+                </div>
+                <div style="width:100%; height:4px; background:#1e293b; border-radius:2px;">
+                    <div style="width:${hPct}%; height:100%; background:var(--power-color);"></div>
+                </div>
+            </div>`;
+        }).join('');
+
+        const doneTasks = state.checklist.filter(t => t.done).length;
+        document.getElementById('report-checklist-summary').innerHTML = `
+            <div style="margin-bottom:8px; font-weight:bold;">Monthly Mission Success: ${doneTasks}/${state.checklist.length}</div>
+            ${state.checklist.map(t => `<div style="display:flex; gap:8px; margin-bottom:3px; ${t.done ? 'color:white' : 'color:var(--muted)'}"><span>${t.done ? '✓' : '○'}</span><span>${t.text}</span></div>`).join('')}
+        `;
+
+        document.getElementById('report-modal').style.display = 'flex';
+        confetti({ particleCount: 150, spread: 70, origin: { y: 0.6 }, colors: [rankData.color, '#ffffff'] });
+    }
+
+    function downloadReport() {
+        html2canvas(document.querySelector("#capture-area"), { backgroundColor: null }).then(canvas => {
+            const link = document.createElement('a');
+            link.download = `Performance-${months[state.month]}.png`;
+            link.href = canvas.toDataURL();
+            link.click();
+        });
+    }
+
+    function updateStats() {
+        const habits = getHabits();
+        const days = new Date(2026, state.month + 1, 0).getDate();
+        let total = 0;
+        for(let d=1; d<=days; d++) habits.forEach((_,i) => { if(state.checks[`${state.month}-${i}-${d}`]) total++; });
+        const pct = Math.round((total / (habits.length * days)) * 100) || 0;
+        const rankData = getRankData(pct);
+        document.documentElement.style.setProperty('--power-color', rankData.color);
+        document.documentElement.style.setProperty('--accent', rankData.color);
+        const progressCard = document.getElementById('main-progress-card');
+        progressCard.classList.remove('legend-glow', 'titan-glow');
+        if (rankData.isLegend) progressCard.classList.add('legend-glow');
+        else if (rankData.name === "Titan") progressCard.classList.add('titan-glow');
+        document.getElementById('pct-text').innerText = pct + '%';
+        document.getElementById('ring-fill').style.strokeDashoffset = 283 - (pct/100)*283;
+        document.getElementById('stat-wins').innerText = total;
+        document.getElementById('stat-goal').innerText = state.goal + '%';
+        document.getElementById('rank-tag').innerText = `RANK: ${rankData.name.toUpperCase()}`;
+        document.getElementById('rank-tag').style.borderColor = rankData.color;
+        document.getElementById('rank-tag').style.color = rankData.color;
+        document.getElementById('stat-level').innerText = rankData.name;
+        updateCharts(days, rankData.color); renderYearlyDots();
+    }
+
+    function initCharts() {
+        const habits = getHabits();
+        const cfg = { maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { display: false }, x: { grid: { display: false }, ticks: { color: '#64748b', font: { size: 8 } } } } };
+        if(lineChart) lineChart.destroy(); if(barChart) barChart.destroy();
+        lineChart = new Chart(document.getElementById('chart-line'), { type: 'line', data: { labels: [], datasets: [{ data: [], borderColor: '#3b82f6', tension: 0.4, fill: true, backgroundColor: 'rgba(59, 130, 246, 0.1)', pointRadius: 0 }] }, options: cfg });
+        barChart = new Chart(document.getElementById('chart-bar'), { type: 'bar', data: { labels: habits, datasets: [{ data: [], backgroundColor: '#3b82f6', borderRadius: 4 }] }, options: cfg });
+    }
+
+    function updateCharts(days, color) {
+        const habits = getHabits();
+        lineChart.data.labels = Array.from({length: days}, (_, i) => i+1);
+        lineChart.data.datasets[0].data = Array.from({length: days}, (_, d) => {
+            let count = 0; habits.forEach((_, i) => { if(state.checks[`${state.month}-${i}-${d+1}`]) count++; });
+            return count;
+        });
+        lineChart.data.datasets[0].borderColor = color;
+        lineChart.data.datasets[0].backgroundColor = color + '1A'; lineChart.update();
+        barChart.data.labels = habits;
+        barChart.data.datasets[0].data = habits.map((_, i) => {
+            let count = 0; for(let d=1; d<=days; d++) if(state.checks[`${state.month}-${i}-${d}`]) count++;
+            return Math.round((count/days)*100);
+        });
+        barChart.data.datasets[0].backgroundColor = color; barChart.update();
+    }
+
+    function toggle(h, d, v) { 
+        state.checks[`${state.month}-${h}-${d}`] = v; 
+        save(); updateStats(); renderPrecisionGrid();
+        if(v) confetti({ particleCount: 15, spread: 20, origin: { y: 0.8 }, colors: [getRankData(parseInt(document.getElementById('pct-text').innerText)).color] });
+    }
+    
+    function save() { localStorage.setItem('legend_v2026', JSON.stringify(state)); }
+    
+    function changeMonth() { 
+        state.month = parseInt(document.getElementById('month-select').value); 
+        save(); 
+        init(); 
+    }
+    
+    function updateGoal() { state.goal = parseInt(document.getElementById('goal-select').value); save(); updateStats(); }
+    
+    function addHabit() { 
+        const n = prompt("Habit Name for " + months[state.month] + ":"); 
+        if(n) { 
+            if(!state.monthlyHabits[state.month]) state.monthlyHabits[state.month] = [];
+            state.monthlyHabits[state.month].push(n); 
+            save(); 
+            init(); 
+        } 
+    }
+
+    function clonePreviousHabits() {
+        const prevMonth = state.month === 0 ? 11 : state.month - 1;
+        const prevHabits = state.monthlyHabits[prevMonth] || [];
+        if(prevHabits.length === 0) {
+            alert("No habits found in the previous month to copy.");
+            return;
+        }
+        if(confirm(`Copy ${prevHabits.length} habits from ${months[prevMonth]}?`)) {
+            state.monthlyHabits[state.month] = [...prevHabits];
+            save();
+            init();
+        }
+    }
+
+    function renderHabitSidebar() { 
+        const habits = getHabits();
+        document.getElementById('habit-list').innerHTML = habits.map((h, i) => `<div style="display:flex; justify-content:space-between; font-size:10px; margin-bottom:4px; background:#000; padding:4px 8px; border-radius:4px;">${h}<span style="color:red; cursor:pointer" onclick="delHabit(${i})">✕</span></div>`).join(''); 
+    }
+    
+    function delHabit(i) { 
+        if(confirm("Delete habit from this month?")) { 
+            state.monthlyHabits[state.month].splice(i,1); 
+            save(); 
+            init(); 
+        } 
+    }
+    
+    function resetData() { if(confirm("Wipe all data?")) { localStorage.removeItem('legend_v2026'); location.reload(); } }
+    
+    init();
+</script>
+
+</body>
+</html>
